@@ -19,7 +19,7 @@ jobs:
 
       - name: Extract Android project
         run: |
-          unzip -q claude-free-build-setup.zip -d source
+          unzip -q claude-free-build-setup-fixed.zip -d source
           ls source/freellmapi-android-main
 
       - name: Set up Java
