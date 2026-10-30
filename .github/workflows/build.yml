@@ -45,19 +45,44 @@ jobs:
         working-directory: source/freellmapi-android-main/android/app/src/main/assets/nodejs-project
         run: npm install --omit=dev --no-audit --no-fund
 
+      
       - name: Download Node.js Android runtime
         run: |
           set -euxo pipefail
+
           curl -fL --retry 3 -o nodejs-mobile.zip "https://github.com/nodejs-mobile/nodejs-mobile/releases/download/v18.20.4/nodejs-mobile-v18.20.4-android.zip"
-          mkdir nodejs-mobile
+
+          mkdir -p nodejs-mobile
           unzip -q nodejs-mobile.zip -d nodejs-mobile
-          cd source/freellmapi-android-main
-          mkdir -p android/app/libnode/bin android/app/libnode/include
+
+          PROJECT="$GITHUB_WORKSPACE/source/freellmapi-android-main"
+          RUNTIME="$GITHUB_WORKSPACE/nodejs-mobile"
+
+          mkdir -p "$PROJECT/android/app/libnode/bin"
+          mkdir -p "$PROJECT/android/app/libnode/include"
+
           for abi in arm64-v8a armeabi-v7a x86_64; do
-            mkdir -p "android/app/libnode/bin/$abi"
-            cp "../nodejs-mobile/bin/$abi/libnode.so" "android/app/libnode/bin/$abi/"
+            LIBNODE=$(find "$RUNTIME" -type f -path "*/$abi/libnode.so" -print -quit)
+
+            if [ -z "$LIBNODE" ]; then
+              echo "FEHLER: libnode.so für $abi nicht gefunden!"
+              find "$RUNTIME" -type f
+              exit 1
+            fi
+
+            mkdir -p "$PROJECT/android/app/libnode/bin/$abi"
+            cp "$LIBNODE" "$PROJECT/android/app/libnode/bin/$abi/"
           done
-          cp -R ../nodejs-mobile/include/node android/app/libnode/include/
+
+          HEADERS=$(find "$RUNTIME" -type d -path "*/include/node" -print -quit)
+
+          if [ -z "$HEADERS" ]; then
+            echo "FEHLER: Node.js-Header nicht gefunden!"
+            exit 1
+          fi
+
+          cp -R "$HEADERS" "$PROJECT/android/app/libnode/include/"
+          
 
       - name: Build APK
         working-directory: source/freellmapi-android-main
