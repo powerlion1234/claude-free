@@ -1,0 +1,69 @@
+
+name: Build Claude Free APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v4
+
+      - name: Extract Android project
+        run: |
+          unzip -q claude-free-build-setup.zip -d source
+          ls source/freellmapi-android-main
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install build tools
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;26.1.10909125" "cmake;3.22.1"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: source/freellmapi-android-main/android/app/src/main/assets/nodejs-project
+        run: npm install --omit=dev --no-audit --no-fund
+
+      - name: Download Node.js Android runtime
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o nodejs-mobile.zip "https://github.com/nodejs-mobile/nodejs-mobile/releases/download/v18.20.4/nodejs-mobile-v18.20.4-android.zip"
+          mkdir nodejs-mobile
+          unzip -q nodejs-mobile.zip -d nodejs-mobile
+          cd source/freellmapi-android-main
+          mkdir -p android/app/libnode/bin android/app/libnode/include
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            mkdir -p "android/app/libnode/bin/$abi"
+            cp "../nodejs-mobile/bin/$abi/libnode.so" "android/app/libnode/bin/$abi/"
+          done
+          cp -R ../nodejs-mobile/include/node android/app/libnode/include/
+
+      - name: Build APK
+        working-directory: source/freellmapi-android-main
+        run: chmod +x gradlew && ./gradlew --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Free-APK
+          path: source/freellmapi-android-main/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
